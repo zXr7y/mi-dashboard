@@ -1,0 +1,1009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sleek App - Auth & Responsive Dashboard</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  
+  <!-- React & Babel CDNs -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-black text-slate-100 antialiased selection:bg-amber-400 selection:text-black">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, createContext, useContext } = React;
+
+    // Google OAuth Client ID (público, no es secreto)
+    const GOOGLE_CLIENT_ID = '182829855598-9c689pv5tut21urm65gps7mg2feqqqlp.apps.googleusercontent.com';
+
+    // Translation Dictionary
+    const translations = {
+      es: {
+        menu: "Menú",
+        dashboard: "Dashboard",
+        user: "Usuario",
+        messages: "Mensajes",
+        fileManager: "Archivos",
+        setting: "Configuración",
+        logout: "Cerrar Sesión",
+        workspace: "Espacio de Trabajo",
+        connected: "Conectado",
+        welcomeBack: "Bienvenido de nuevo",
+        enterCredentials: "Ingresa tus credenciales para acceder a tu cuenta",
+        emailAddress: "Correo Electrónico",
+        password: "Contraseña",
+        rememberMe: "Recordarme",
+        forgotPassword: "¿Olvidaste tu contraseña?",
+        signIn: "Iniciar Sesión",
+        orContinueWith: "O CONTINÚA CON",
+        noAccount: "¿No tienes una cuenta?",
+        signUp: "Regístrate",
+        // Messages
+        messageCenter: "Centro de Mensajes",
+        anonActiveDesc: "Envía mensajes sin revelar tu identidad ni tu dirección de correo.",
+        identActiveDesc: "Tus mensajes incluirán tu remitente registrado.",
+        anonBadge: "100% Anónimo",
+        publicBadge: "Identidad Visible",
+        sendMessage: "Enviar Mensaje",
+        sendAnon: "Enviar Anónimamente",
+        privacyNoticeAnon: "Tu correo e identidad permanecerán ocultos. El destinatario solo verá el mensaje.",
+        privacyNoticeIdent: "Tu mensaje incluirá tu firma de correo registrada.",
+        recipientLabel: "Usuario / ID Destinatario",
+        recipientPlaceholder: "Ej. usuario_123 o Sofía",
+        messageLabel: "Mensaje",
+        messagePlaceholder: "Escribe tu mensaje aquí...",
+        sentAnonStatus: "Enviado Anónimamente",
+        sentIdentStatus: "Enviado Identificado",
+        messageHistory: "Historial de Mensajes",
+        noMessages: "No has enviado ningún mensaje todavía.",
+        fromUser: "De:",
+        toUser: "Para:",
+        // Settings
+        settingsTitle: "Ajustes del Sistema",
+        settingsDesc: "Personaliza el idioma y las opciones de privacidad de tu cuenta",
+        languageSetting: "Idioma de la Aplicación",
+        languageDesc: "Selecciona el idioma preferido para la interfaz de usuario",
+        anonSetting: "Mensajes Anónimos",
+        anonSettingDesc: "Permite ocultar tu identidad al enviar mensajes a otros usuarios",
+        enabled: "Activado",
+        disabled: "Desactivado",
+        saveChanges: "Guardar Cambios",
+        settingsSaved: "¡Ajustes actualizados correctamente!",
+        // Overview Section
+        liveOverview: "Vista General",
+        totalUsage: "Uso Total",
+        activeItems: "Ítems Activos",
+        systemStatus: "Estado del Sistema",
+        optimal: "Óptimo",
+        operational: "Todos los servicios funcionando",
+        recentActivity: "Actividad Reciente en",
+        completed: "Completado",
+        // Users
+        registeredUsers: "Usuarios Registrados",
+        usersDesc: "Todas las personas que se han registrado en la plataforma",
+        searchUsers: "Buscar por nombre o correo...",
+        usersCount: "usuarios",
+        colUser: "Usuario",
+        colRole: "Rol",
+        colStatus: "Estado",
+        colJoined: "Registro",
+        roleAdmin: "Admin",
+        roleMember: "Miembro",
+        statusOnline: "En línea",
+        statusOffline: "Desconectado",
+        youBadge: "Tú",
+        noUsersFound: "No se encontraron usuarios.",
+        googleError: "No se pudo iniciar sesión con Google. Intenta de nuevo."
+      },
+      en: {
+        menu: "Menu",
+        dashboard: "Dashboard",
+        user: "User",
+        messages: "Messages",
+        fileManager: "File Manager",
+        setting: "Setting",
+        logout: "Log Out",
+        workspace: "Application Workspace",
+        connected: "Connected",
+        welcomeBack: "Welcome Back",
+        enterCredentials: "Enter your credentials to access your secure account",
+        emailAddress: "Email Address",
+        password: "Password",
+        rememberMe: "Remember me",
+        forgotPassword: "Forgot password?",
+        signIn: "Sign In",
+        orContinueWith: "OR CONTINUE WITH",
+        noAccount: "Don't have an account?",
+        signUp: "Sign Up",
+        // Messages
+        messageCenter: "Message Center",
+        anonActiveDesc: "Send messages without revealing your identity or email address.",
+        identActiveDesc: "Your messages will include your verified email handle.",
+        anonBadge: "100% Anonymous",
+        publicBadge: "Identity Visible",
+        sendMessage: "Send Message",
+        sendAnon: "Send Anonymously",
+        privacyNoticeAnon: "Your email & identity remain hidden. The recipient only sees the message content.",
+        privacyNoticeIdent: "Your message will show your verified user email as sender.",
+        recipientLabel: "Recipient User / ID",
+        recipientPlaceholder: "e.g. user_123 or Sophia",
+        messageLabel: "Message",
+        messagePlaceholder: "Write your message here...",
+        sentAnonStatus: "Sent Anonymously",
+        sentIdentStatus: "Sent Identified",
+        messageHistory: "Message History",
+        noMessages: "You haven't sent any messages yet.",
+        fromUser: "From:",
+        toUser: "To:",
+        // Settings
+        settingsTitle: "System Settings",
+        settingsDesc: "Customize application language and privacy configurations",
+        languageSetting: "Application Language",
+        languageDesc: "Select your preferred interface language",
+        anonSetting: "Anonymous Messages",
+        anonSettingDesc: "Optionally hide your identity when delivering user messages",
+        enabled: "Enabled",
+        disabled: "Disabled",
+        saveChanges: "Save Settings",
+        settingsSaved: "Settings updated successfully!",
+        // Overview Section
+        liveOverview: "Live Overview",
+        totalUsage: "Total Usage",
+        activeItems: "Active Items",
+        systemStatus: "System Status",
+        optimal: "Optimal",
+        operational: "All services operational",
+        recentActivity: "Recent Activity in",
+        completed: "Completed",
+        // Users
+        registeredUsers: "Registered Users",
+        usersDesc: "Everyone who has signed up on the platform",
+        searchUsers: "Search by name or email...",
+        usersCount: "users",
+        colUser: "User",
+        colRole: "Role",
+        colStatus: "Status",
+        colJoined: "Joined",
+        roleAdmin: "Admin",
+        roleMember: "Member",
+        statusOnline: "Online",
+        statusOffline: "Offline",
+        youBadge: "You",
+        noUsersFound: "No users found.",
+        googleError: "Couldn't sign in with Google. Please try again."
+      }
+    };
+
+    const Icon = ({ name, className = "w-5 h-5", ...props }) => {
+      useEffect(() => {
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+      }, [name]);
+      return <i data-lucide={name} className={className} {...props}></i>;
+    };
+
+    function LoginScreen({ onLoginSuccess, lang }) {
+      const t = translations[lang];
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [showPassword, setShowPassword] = useState(false);
+      const [rememberMe, setRememberMe] = useState(false);
+      const [loading, setLoading] = useState(false);
+      const [googleError, setGoogleError] = useState('');
+
+      // Real Google sign-in: opens the Google account chooser
+      const handleGoogleLogin = () => {
+        setGoogleError('');
+        if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+          setGoogleError(t.googleError);
+          return;
+        }
+        const client = window.google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: 'openid email profile',
+          prompt: 'select_account',
+          callback: async (resp) => {
+            if (resp.error || !resp.access_token) {
+              setGoogleError(t.googleError);
+              return;
+            }
+            try {
+              const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { Authorization: 'Bearer ' + resp.access_token }
+              });
+              const p = await r.json();
+              onLoginSuccess(p.email, { name: p.name, picture: p.picture });
+            } catch (err) {
+              setGoogleError(t.googleError);
+            }
+          },
+          error_callback: () => {
+            // Popup closed or blocked: stay on the login screen quietly
+          }
+        });
+        client.requestAccessToken();
+      };
+
+      const handleSubmit = (e) => {
+        e.preventDefault();
+        setLoading(true);
+        setTimeout(() => {
+          setLoading(false);
+          onLoginSuccess(email || 'user@domain.com');
+        }, 1200);
+      };
+
+      return (
+        <div className="relative min-h-screen flex items-center justify-center p-4 overflow-hidden bg-black">
+          <div className="absolute inset-0 opacity-30 pointer-events-none bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-amber-900/40 via-black to-black"></div>
+
+          <div className="relative w-full max-w-md p-8 sm:p-10 rounded-3xl bg-zinc-950/70 border border-zinc-800/80 backdrop-blur-2xl shadow-2xl shadow-black">
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-bold tracking-tight text-white mb-2">
+                {t.welcomeBack}
+              </h1>
+              <p className="text-xs sm:text-sm text-zinc-400">
+                {t.enterCredentials}
+              </p>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">
+                  {t.emailAddress}
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-500">
+                    <Icon name="mail" className="w-4 h-4" />
+                  </span>
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@domain.com"
+                    className="w-full pl-10 pr-4 py-3 bg-zinc-900/60 border border-zinc-800 rounded-xl text-white placeholder-zinc-600 text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-2">
+                  {t.password}
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-500">
+                    <Icon name="lock" className="w-4 h-4" />
+                  </span>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••••••"
+                    className="w-full pl-10 pr-10 py-3 bg-zinc-900/60 border border-zinc-800 rounded-xl text-white placeholder-zinc-600 text-sm focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    <Icon name={showPassword ? 'eye-off' : 'eye'} className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-zinc-400">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded bg-zinc-900 border-zinc-700 text-amber-400 focus:ring-0 cursor-pointer accent-amber-400"
+                  />
+                  <span>{t.rememberMe}</span>
+                </label>
+                <a href="#forgot" onClick={(e) => e.preventDefault()} className="hover:text-amber-400 transition-colors">
+                  {t.forgotPassword}
+                </a>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3 px-4 bg-amber-400 hover:bg-amber-300 text-black font-semibold rounded-xl text-sm flex items-center justify-center space-x-2 shadow-lg shadow-amber-400/20 transition-all active:scale-[0.99] disabled:opacity-50"
+              >
+                {loading ? (
+                  <span className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin"></span>
+                ) : (
+                  <>
+                    <span>{t.signIn}</span>
+                    <Icon name="arrow-right" className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="relative my-6 text-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-zinc-800"></div>
+              </div>
+              <span className="relative px-3 bg-zinc-950 text-[10px] tracking-widest text-zinc-600 uppercase">
+                {t.orContinueWith}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={handleGoogleLogin}
+                className="flex items-center justify-center py-2.5 px-4 bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 transition-colors"
+              >
+                <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24">
+                  <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.4 1 3.5 3.6 1.6 7.4l3.7 2.9C6.2 7.3 8.9 5 12 5z"/>
+                  <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z"/>
+                  <path fill="#FBBC05" d="M5.3 14.7c-.2-.8-.4-1.7-.4-2.7s.2-1.9.4-2.7L1.6 6.4C.6 8.4 0 10.6 0 13s.6 4.6 1.6 6.6l3.7-2.9z"/>
+                  <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3.1 0-5.8-2.3-6.7-5.3L1.6 15.6C3.5 19.4 7.4 23 12 23z"/>
+                </svg>
+                Google
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onLoginSuccess('apple.user@domain.com')}
+                className="flex items-center justify-center py-2.5 px-4 bg-zinc-900/60 hover:bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-medium text-zinc-300 transition-colors"
+              >
+                <svg className="w-4 h-4 mr-2 fill-current" viewBox="0 0 24 24">
+                  <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 5.43c.58-.7 1.01-1.68.9-2.65-.87.04-1.92.58-2.54 1.28-.53.58-.99 1.57-.86 2.53 1 .08 1.93-.49 2.5-1.16z"/>
+                </svg>
+                Apple
+              </button>
+            </div>
+
+            {googleError && (
+              <p className="mt-4 text-center text-xs text-rose-400">{googleError}</p>
+            )}
+
+            <div className="mt-8 text-center text-xs text-zinc-500">
+              {t.noAccount}{' '}
+              <a href="#signup" onClick={(e) => e.preventDefault()} className="text-amber-400 font-medium hover:underline">
+                {t.signUp}
+              </a>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function MessagesView({ userEmail, isAnonymous, lang }) {
+      const t = translations[lang];
+      const [messages, setMessages] = useState([
+        { id: 1, recipient: 'Ana García', text: '¡Hola! ¿Cómo va el avance del proyecto?', timestamp: '10 min ago', isAnon: true, sender: 'Anonymous' },
+        { id: 2, recipient: 'Carlos Mendoza', text: 'Aquí tienes los reportes semanales actualizados.', timestamp: '45 min ago', isAnon: false, sender: userEmail }
+      ]);
+      const [recipient, setRecipient] = useState('');
+      const [text, setText] = useState('');
+
+      const handleSendMessage = (e) => {
+        e.preventDefault();
+        if (!recipient.trim() || !text.trim()) return;
+
+        const newMessage = {
+          id: Date.now(),
+          recipient: recipient.trim(),
+          text: text.trim(),
+          timestamp: 'Just now',
+          isAnon: isAnonymous,
+          sender: isAnonymous ? 'Anonymous' : userEmail
+        };
+
+        setMessages([newMessage, ...messages]);
+        setRecipient('');
+        setText('');
+      };
+
+      return (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-2xl font-bold text-white tracking-tight">{t.messageCenter}</h2>
+                <span className={`text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-sm ${
+                  isAnonymous 
+                    ? 'bg-amber-400 text-black shadow-amber-400/20' 
+                    : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                }`}>
+                  <Icon name={isAnonymous ? "shield-off" : "user-check"} className="w-3 h-3" />
+                  {isAnonymous ? t.anonBadge : t.publicBadge}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-400 mt-1">
+                {isAnonymous ? t.anonActiveDesc : t.identActiveDesc}
+              </p>
+            </div>
+            <span className="text-xs px-3 py-1 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20 font-medium">
+              {messages.length} {t.messages}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Form Column */}
+            <div className="lg:col-span-1 p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 h-fit">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-white flex items-center space-x-2">
+                  <Icon name="send" className="w-4 h-4 text-amber-400" />
+                  <span>{isAnonymous ? t.sendAnon : t.sendMessage}</span>
+                </h3>
+              </div>
+
+              {/* Status Notice */}
+              <div className={`mb-4 p-3 rounded-xl border flex items-start space-x-2.5 ${
+                isAnonymous 
+                  ? 'bg-amber-400/10 border-amber-400/20 text-amber-200/90' 
+                  : 'bg-zinc-950/80 border-zinc-800 text-zinc-400'
+              }`}>
+                <Icon name={isAnonymous ? "eye-off" : "user"} className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                <p className="text-xs leading-relaxed">
+                  {isAnonymous ? t.privacyNoticeAnon : t.privacyNoticeIdent}
+                </p>
+              </div>
+
+              <form onSubmit={handleSendMessage} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
+                    {t.recipientLabel}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={recipient}
+                    onChange={(e) => setRecipient(e.target.value)}
+                    placeholder={t.recipientPlaceholder}
+                    className="w-full px-3.5 py-2.5 bg-zinc-950/60 border border-zinc-800 rounded-xl text-white placeholder-zinc-600 text-sm focus:outline-none focus:border-amber-400 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-1.5">
+                    {t.messageLabel}
+                  </label>
+                  <textarea
+                    required
+                    rows="4"
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    placeholder={t.messagePlaceholder}
+                    className="w-full px-3.5 py-2.5 bg-zinc-950/60 border border-zinc-800 rounded-xl text-white placeholder-zinc-600 text-sm focus:outline-none focus:border-amber-400 transition-all resize-none"
+                  ></textarea>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 px-4 bg-amber-400 hover:bg-amber-300 text-black font-semibold rounded-xl text-sm flex items-center justify-center space-x-2 shadow-lg shadow-amber-400/20 transition-all active:scale-[0.99]"
+                >
+                  <Icon name="send" className="w-4 h-4" />
+                  <span>{isAnonymous ? t.sendAnon : t.sendMessage}</span>
+                </button>
+              </form>
+            </div>
+
+            {/* Messages Feed */}
+            <div className="lg:col-span-2 p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col">
+              <h3 className="text-lg font-semibold text-white mb-4 flex items-center space-x-2">
+                <Icon name="message-square" className="w-4 h-4 text-amber-400" />
+                <span>{t.messageHistory}</span>
+              </h3>
+
+              <div className="space-y-3 overflow-y-auto max-h-[420px] pr-1">
+                {messages.length === 0 ? (
+                  <div className="text-center py-12 text-zinc-500 text-sm">
+                    {t.noMessages}
+                  </div>
+                ) : (
+                  messages.map((msg) => (
+                    <div 
+                      key={msg.id} 
+                      className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/60 hover:border-zinc-700 transition-all space-y-2 group"
+                    >
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center space-x-2.5">
+                          <div className={`w-8 h-8 rounded-lg border flex items-center justify-center ${
+                            msg.isAnon ? 'bg-zinc-800 text-amber-400 border-zinc-700' : 'bg-amber-400 text-black border-amber-300'
+                          }`}>
+                            <Icon name={msg.isAnon ? "user-x" : "user"} className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2 text-xs">
+                              <span className="text-zinc-500">{t.toUser}</span>
+                              <span className="font-semibold text-white">{msg.recipient}</span>
+                              {!msg.isAnon && (
+                                <span className="text-zinc-400 text-[11px]">({t.fromUser} {msg.sender})</span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-zinc-500">{msg.timestamp}</span>
+                          </div>
+                        </div>
+                        <span className={`text-[10px] px-2.5 py-1 rounded-full border font-medium flex items-center gap-1 ${
+                          msg.isAnon 
+                            ? 'bg-amber-400/10 text-amber-400 border-amber-400/20' 
+                            : 'bg-zinc-800/80 text-zinc-300 border-zinc-700'
+                        }`}>
+                          <Icon name={msg.isAnon ? "lock" : "unlock"} className="w-3 h-3" />
+                          {msg.isAnon ? t.sentAnonStatus : t.sentIdentStatus}
+                        </span>
+                      </div>
+                      <p className="text-sm text-zinc-300 pl-10 pt-1 leading-relaxed">
+                        {msg.text}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function SettingsView({ lang, setLang, isAnonymous, setIsAnonymous }) {
+      const t = translations[lang];
+      const [savedAlert, setSavedAlert] = useState(false);
+
+      const handleSave = () => {
+        setSavedAlert(true);
+        setTimeout(() => setSavedAlert(false), 3000);
+      };
+
+      return (
+        <div className="space-y-6 animate-fade-in max-w-4xl">
+          <div>
+            <h2 className="text-2xl font-bold text-white tracking-tight">{t.settingsTitle}</h2>
+            <p className="text-xs text-zinc-400 mt-1">{t.settingsDesc}</p>
+          </div>
+
+          {savedAlert && (
+            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm flex items-center space-x-2 animate-bounce">
+              <Icon name="check-circle" className="w-5 h-5 flex-shrink-0" />
+              <span>{t.settingsSaved}</span>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {/* Language Control */}
+            <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <Icon name="globe" className="w-5 h-5 text-amber-400" />
+                  <h3 className="text-base font-semibold text-white">{t.languageSetting}</h3>
+                </div>
+                <p className="text-xs text-zinc-400">{t.languageDesc}</p>
+              </div>
+
+              <div className="flex items-center space-x-2 bg-zinc-950 p-1.5 rounded-xl border border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setLang('es')}
+                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+                    lang === 'es'
+                      ? 'bg-amber-400 text-black shadow-md'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  Español (ES)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLang('en')}
+                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition-all ${
+                    lang === 'en'
+                      ? 'bg-amber-400 text-black shadow-md'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  English (EN)
+                </button>
+              </div>
+            </div>
+
+            {/* Anonymous Messages Toggle */}
+            <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <Icon name="ghost" className="w-5 h-5 text-amber-400" />
+                  <h3 className="text-base font-semibold text-white">{t.anonSetting}</h3>
+                </div>
+                <p className="text-xs text-zinc-400">{t.anonSettingDesc}</p>
+              </div>
+
+              <div className="flex items-center space-x-3">
+                <span className={`text-xs font-medium ${isAnonymous ? 'text-amber-400' : 'text-zinc-500'}`}>
+                  {isAnonymous ? t.enabled : t.disabled}
+                </span>
+
+                {/* Switch Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsAnonymous(!isAnonymous)}
+                  className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    isAnonymous ? 'bg-amber-400' : 'bg-zinc-800'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-black shadow ring-0 transition duration-200 ease-in-out ${
+                      isAnonymous ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {/* Action Bar */}
+            <div className="pt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={handleSave}
+                className="py-3 px-6 bg-amber-400 hover:bg-amber-300 text-black font-semibold rounded-xl text-sm flex items-center space-x-2 shadow-lg shadow-amber-400/20 transition-all active:scale-[0.99]"
+              >
+                <Icon name="save" className="w-4 h-4" />
+                <span>{t.saveChanges}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function UsersView({ userEmail, lang }) {
+      const t = translations[lang];
+      const [query, setQuery] = useState('');
+
+      const users = [
+        { id: 1, name: 'Ana García', email: 'ana.garcia@domain.com', role: 'admin', online: true, joined: '2025-01-14' },
+        { id: 2, name: 'Carlos Mendoza', email: 'carlos.mendoza@domain.com', role: 'member', online: true, joined: '2025-03-02' },
+        { id: 3, name: 'Sofía Ramírez', email: 'sofia.ramirez@domain.com', role: 'member', online: false, joined: '2025-04-21' },
+        { id: 4, name: 'Diego Torres', email: 'diego.torres@domain.com', role: 'member', online: false, joined: '2025-06-09' },
+        { id: 5, name: 'Valeria Núñez', email: 'valeria.nunez@domain.com', role: 'admin', online: true, joined: '2025-08-30' },
+        { id: 6, name: 'Mateo Herrera', email: 'mateo.herrera@domain.com', role: 'member', online: false, joined: '2025-11-17' },
+        { id: 7, name: 'Lucía Fernández', email: 'lucia.fernandez@domain.com', role: 'member', online: true, joined: '2026-02-05' },
+        { id: 8, name: 'Javier Castillo', email: 'javier.castillo@domain.com', role: 'member', online: false, joined: '2026-05-23' },
+      ];
+
+      const q = query.trim().toLowerCase();
+      const filtered = users.filter(
+        (u) => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)
+      );
+
+      return (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h2 className="text-2xl font-bold text-white tracking-tight">{t.registeredUsers}</h2>
+              <p className="text-xs text-zinc-400 mt-1">{t.usersDesc}</p>
+            </div>
+            <span className="text-xs px-3 py-1 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20 font-medium">
+              {users.length} {t.usersCount}
+            </span>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80 space-y-4">
+            {/* Search */}
+            <div className="relative">
+              <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-zinc-500">
+                <Icon name="search" className="w-4 h-4" />
+              </span>
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t.searchUsers}
+                className="w-full pl-10 pr-4 py-2.5 bg-zinc-950/60 border border-zinc-800 rounded-xl text-white placeholder-zinc-600 text-sm focus:outline-none focus:border-amber-400 transition-all"
+              />
+            </div>
+
+            {/* Table header (desktop) */}
+            <div className="hidden md:grid grid-cols-12 gap-4 px-4 text-[10px] uppercase tracking-wider font-semibold text-zinc-500">
+              <span className="col-span-5">{t.colUser}</span>
+              <span className="col-span-2">{t.colRole}</span>
+              <span className="col-span-3">{t.colStatus}</span>
+              <span className="col-span-2">{t.colJoined}</span>
+            </div>
+
+            <div className="space-y-2 overflow-y-auto max-h-[460px] pr-1">
+              {filtered.length === 0 ? (
+                <div className="text-center py-12 text-zinc-500 text-sm">{t.noUsersFound}</div>
+              ) : (
+                filtered.map((u) => (
+                  <div
+                    key={u.id}
+                    className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4 md:items-center p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/60 hover:border-zinc-700 transition-all"
+                  >
+                    <div className="md:col-span-5 flex items-center space-x-3 min-w-0">
+                      <div className="w-9 h-9 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-amber-400 font-bold text-sm flex-shrink-0">
+                        {u.name.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{u.name}</p>
+                        <p className="text-xs text-zinc-500 truncate">{u.email}</p>
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <span className={`text-[10px] px-2.5 py-1 rounded-full border font-medium ${
+                        u.role === 'admin'
+                          ? 'bg-amber-400/10 text-amber-400 border-amber-400/20'
+                          : 'bg-zinc-800/80 text-zinc-300 border-zinc-700'
+                      }`}>
+                        {u.role === 'admin' ? t.roleAdmin : t.roleMember}
+                      </span>
+                    </div>
+
+                    <div className="md:col-span-3 flex items-center space-x-2 text-xs">
+                      <span className={`w-2 h-2 rounded-full ${u.online ? 'bg-emerald-400' : 'bg-zinc-600'}`}></span>
+                      <span className={u.online ? 'text-emerald-400' : 'text-zinc-500'}>
+                        {u.online ? t.statusOnline : t.statusOffline}
+                      </span>
+                    </div>
+
+                    <div className="md:col-span-2 text-xs text-zinc-400">{u.joined}</div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function SectionView({ title, lang }) {
+      const t = translations[lang];
+      return (
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-white tracking-tight">{title}</h2>
+            <span className="text-xs px-3 py-1 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20 font-medium">
+              {t.liveOverview}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80">
+              <div className="flex justify-between items-start mb-4">
+                <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">{t.totalUsage}</span>
+                <Icon name="activity" className="text-amber-400 w-5 h-5" />
+              </div>
+              <p className="text-3xl font-bold text-white">84.2%</p>
+              <p className="text-xs text-emerald-400 mt-2 flex items-center">
+                ↑ +12%
+              </p>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80">
+              <div className="flex justify-between items-start mb-4">
+                <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">{t.activeItems}</span>
+                <Icon name="layers" className="text-amber-400 w-5 h-5" />
+              </div>
+              <p className="text-3xl font-bold text-white">1,248</p>
+              <p className="text-xs text-zinc-500 mt-2">
+                Syncing
+              </p>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80">
+              <div className="flex justify-between items-start mb-4">
+                <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">{t.systemStatus}</span>
+                <Icon name="shield-check" className="text-emerald-400 w-5 h-5" />
+              </div>
+              <p className="text-3xl font-bold text-emerald-400">{t.optimal}</p>
+              <p className="text-xs text-zinc-500 mt-2">
+                {t.operational}
+              </p>
+            </div>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-zinc-900/60 border border-zinc-800/80">
+            <h3 className="text-lg font-semibold text-white mb-4">{t.recentActivity} {title}</h3>
+            <div className="space-y-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-zinc-950/40 border border-zinc-800/50">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-300">
+                      #{i}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-zinc-200">Activity #{i} ({title})</p>
+                      <p className="text-xs text-zinc-500">Updated recently</p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-zinc-400">{t.completed}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function DashboardScreen({ userEmail, userProfile, onLogout, lang, setLang, isAnonymous, setIsAnonymous }) {
+      const t = translations[lang];
+      const [activeItem, setActiveItem] = useState('Dashboard');
+      const [isOpen, setIsOpen] = useState(true);
+
+      // Dynamic Menu Names
+      const menuItems = [
+        { id: 'Dashboard', name: t.dashboard, icon: 'layout-dashboard' },
+        { id: 'User', name: t.user, icon: 'user' },
+        { id: 'Messages', name: t.messages, icon: 'message-square' },
+        { id: 'File Manager', name: t.fileManager, icon: 'folder-kanban' },
+        { id: 'Setting', name: t.setting, icon: 'settings' },
+      ];
+
+      return (
+        <div className="min-h-screen bg-black flex p-3 sm:p-6 gap-6">
+          
+          {/* Responsive Sidebar */}
+          <aside className={`transition-all duration-300 ease-in-out bg-zinc-950 text-white rounded-3xl p-4 flex flex-col justify-between border border-zinc-800/80 shadow-2xl ${isOpen ? 'w-64' : 'w-20'}`}>
+            <div>
+              {/* Menu Header */}
+              <div className="flex items-center justify-between mb-8 px-2 pt-2">
+                <div className="flex items-center space-x-3">
+                  <div className="w-9 h-9 rounded-2xl bg-amber-400 text-black flex items-center justify-center font-bold text-lg shadow-md shadow-amber-400/20">
+                    ❖
+                  </div>
+                  {isOpen && <span className="font-bold text-lg tracking-wide text-white">{t.menu}</span>}
+                </div>
+                <button 
+                  onClick={() => setIsOpen(!isOpen)} 
+                  className="text-zinc-400 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-zinc-900"
+                >
+                  <Icon name="menu" className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Navigation Items */}
+              <nav className="space-y-2">
+                {menuItems.map((item) => {
+                  const isActive = activeItem === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveItem(item.id)}
+                      className={`w-full flex items-center space-x-3 px-4 py-3.5 rounded-2xl transition-all duration-200 ${
+                        isActive 
+                          ? 'bg-white text-zinc-950 font-semibold shadow-lg shadow-white/10' 
+                          : 'text-zinc-400 hover:text-white hover:bg-zinc-900/60'
+                      }`}
+                    >
+                      <Icon name={item.icon} className={`w-5 h-5 flex-shrink-0 ${isActive ? 'text-zinc-950' : 'text-zinc-400'}`} />
+                      {isOpen && <span className="text-sm whitespace-nowrap">{item.name}</span>}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+
+            {/* Logout Action */}
+            <div className="pt-4 border-t border-zinc-900">
+              <button
+                onClick={onLogout}
+                className="w-full flex items-center space-x-3 px-4 py-3 rounded-2xl text-rose-400 hover:bg-rose-500/10 transition-colors"
+              >
+                <Icon name="log-out" className="w-5 h-5 flex-shrink-0" />
+                {isOpen && <span className="text-sm font-medium">{t.logout}</span>}
+              </button>
+            </div>
+          </aside>
+
+          {/* Main Workspace */}
+          <main className="flex-1 rounded-3xl bg-zinc-950/40 border border-zinc-900/80 p-6 sm:p-8 overflow-y-auto">
+            {/* Top Bar */}
+            <header className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 mb-6 border-b border-zinc-900 gap-4">
+              <div>
+                <p className="text-xs font-semibold text-amber-400 tracking-wider uppercase">{t.workspace}</p>
+                <h1 className="text-xl font-bold text-white">
+                  {menuItems.find(m => m.id === activeItem)?.name || activeItem}
+                </h1>
+              </div>
+
+              <div className="flex items-center space-x-3">
+                <div className="text-right hidden sm:block">
+                  <p className="text-xs font-medium text-zinc-200">{(userProfile && userProfile.name) || userEmail}</p>
+                  <p className="text-[10px] text-emerald-400 font-mono">● {t.connected}</p>
+                </div>
+                {userProfile && userProfile.picture ? (
+                  <img
+                    src={userProfile.picture}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="w-10 h-10 rounded-full border border-zinc-700 object-cover"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-amber-400 font-bold">
+                    {userEmail.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+            </header>
+
+            {/* Dynamic Active Section View */}
+            {activeItem === 'Messages' && (
+              <MessagesView userEmail={userEmail} isAnonymous={isAnonymous} lang={lang} />
+            )}
+            {activeItem === 'Setting' && (
+              <SettingsView lang={lang} setLang={setLang} isAnonymous={isAnonymous} setIsAnonymous={setIsAnonymous} />
+            )}
+            {activeItem === 'User' && (
+              <UsersView userEmail={userEmail} lang={lang} />
+            )}
+            {activeItem !== 'Messages' && activeItem !== 'Setting' && activeItem !== 'User' && (
+              <SectionView title={menuItems.find(m => m.id === activeItem)?.name || activeItem} lang={lang} />
+            )}
+          </main>
+
+        </div>
+      );
+    }
+
+    function App() {
+      const [isAuthenticated, setIsAuthenticated] = useState(false);
+      const [userEmail, setUserEmail] = useState('');
+      const [lang, setLang] = useState('es'); // Default: Spanish
+      const [isAnonymous, setIsAnonymous] = useState(true); // Default: Anonymous enabled
+      const [userProfile, setUserProfile] = useState(null);
+
+      const handleLoginSuccess = (email, profile) => {
+        setUserEmail(email);
+        setUserProfile(profile || null);
+        setIsAuthenticated(true);
+      };
+
+      const handleLogout = () => {
+        setIsAuthenticated(false);
+        setUserEmail('');
+        setUserProfile(null);
+      };
+
+      return (
+        <React.Fragment>
+          {!isAuthenticated ? (
+            <LoginScreen onLoginSuccess={handleLoginSuccess} lang={lang} />
+          ) : (
+            <DashboardScreen 
+              userEmail={userEmail} 
+              onLogout={handleLogout}
+              userProfile={userProfile} 
+              lang={lang}
+              setLang={setLang}
+              isAnonymous={isAnonymous}
+              setIsAnonymous={setIsAnonymous}
+            />
+          )}
+        </React.Fragment>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
