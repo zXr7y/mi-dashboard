@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sleek App - Auth & Responsive Dashboard</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  
+  <!-- React & Babel CDNs -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-black text-slate-100 antialiased selection:bg-amber-400 selection:text-black">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, createContext, useContext } = React;
+
+    // Google OAuth Client ID (público, no es secreto)
+    const GOOGLE_CLIENT_ID = '182829855598-9c689pv5tut21urm65gps7mg2feqqqlp.apps.googleusercontent.com';
+
+    // Profile edits (photo, display name, username), saved per email in this browser.
+    const PROFILES_KEY = 'dashboardProfileEdits';
+    const loadProfileEdits = (email) => {
+      try {
+        const all = JSON.parse(localStorage.getItem(PROFILES_KEY) || '{}');
+        return all[email] || {};
+      } catch (e) { return {}; }
+    };
+    const storeProfileEdits = (email, edits) => {
+      try {
+        const all = JSON.parse(localStorage.getItem(PROFILES_KEY) || '{}');
+        all[email] = edits;
+        localStorage.setItem(PROFILES_KEY, JSON.stringify(all));
+        return true;
+      } catch (e) { return false; }
+    };
+    const sanitizeUsername = (v) => v.toLowerCase().replace(/[^a-z0-9_.]/g, '').slice(0, 20);
+    const defaultUsername = (email) => sanitizeUsername((email || '').split('@')[0]) || 'user';
+
+    // ---------- Admin panel ----------
+    const ADMIN_PASSWORD = '7890';
+
+    const RANKS = {
+      member:    { labelKey: 'rankMember',    cls: 'bg-zinc-800/80 text-zinc-300 border-zinc-700' },
+      vip:       { labelKey: 'rankVip',       cls: 'bg-violet-400/10 text-violet-300 border-violet-400/30' },
+      moderator: { labelKey: 'rankModerator', cls: 'bg-sky-400/10 text-sky-300 border-sky-400/30' },
+      admin:     { labelKey: 'rankAdmin',     cls: 'bg-amber-400/10 text-amber-400 border-amber-400/20' }
+    };
+    const COLOR_PRESETS = ['#fbbf24', '#f87171', '#fb923c', '#34d399', '#38bdf8', '#a78bfa', '#f472b6', '#ffffff'];
+    const DEFAULT_ADMIN_INFO = { rank: 'member', verified: false, nameColor: '', suspended: false };
+    const ADMIN_DATA_KEY = 'dashboardAdminData';
+    const USERS_KEY = 'dashboardRegisteredUsers';
+    const MESSAGES_KEY = 'dashboardMessageHistory';
+
+    const hasRank = (r) => Object.prototype.hasOwnProperty.call(RANKS, r);
+    const safeColor = (c) => (/^#[0-9a-fA-F]{6}$/.test(c || '') ? c : undefined);
+    const getAdminInfo = (data, email) => ({ ...DEFAULT_ADMIN_INFO, ...((data && data[email]) || {}) });
+
+    const loadAdminData = () => { try { return JSON.parse(localStorage.getItem(ADMIN_DATA_KEY) || '{}') || {}; } catch (e) { return {}; } };
+    const saveAdminData = (data) => { try { localStorage.setItem(ADMIN_DATA_KEY, JSON.stringify(data)); return true; } catch (e) { return false; } };
+    const loadRegisteredUsers = () => { try { return JSON.parse(localStorage.getItem(USERS_KEY) || '{}') || {}; } catch (e) { return {}; } };
+    const saveRegisteredUsers = (data) => { try { localStorage.setItem(USERS_KEY, JSON.stringify(data)); return true; } catch (e) { return false; } };
+
+    // Persistent real message history
+    const loadMessages = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem(MESSAGES_KEY));
+        if (Array.isArray(saved)) return saved;
+      } catch (e) {}
+      return [
+        { id: 1, recipient: 'Ana García', text: '¡Hola! ¿Cómo va el avance del proyecto?', timestamp: '10 min ago', isAnon: true },
+        { id: 2, recipient: 'Carlos Mendoza', text: 'Aquí tienes los reportes semanales actualizados.', timestamp: '45 min ago', isAnon: false }
+      ];
+    };
+    const saveMessages = (msgs) => {
+      try { localStorage.setItem(MESSAGES_KEY, JSON.stringify(msgs)); return true; } catch (e) { return false; }
+    };
+
+    const applyAdminPatch = (data, email, patch) => {
+      const clean = {};
+      if ('rank' in patch && hasRank(patch.rank)) clean.rank = patch.rank;
+      if ('verified' in patch) clean.verified = !!patch.verified;
+      if ('suspended' in patch) clean.suspended = !!patch.suspended;
+      if ('nameColor' in patch) clean.nameColor = safeColor(patch.nameColor) || '';
+      return { ...data, [email]: { ...DEFAULT_ADMIN_INFO, ...(data[email] || {}), ...clean } };
+    };
+
+    const upsertRegisteredUser = (email, googleProfile) => {
+      const edits = loadProfileEdits(email);
+      const all = loadRegisteredUsers();
+      const prev = all[email];
+      all[email] = {
+        name: edits.displayName || (googleProfile && googleProfile.name) || email.split('@')[0],
+        picture: edits.picture || (googleProfile && googleProfile.picture) || '',
+        username: edits.username || defaultUsername(email),
+        joined: (prev && prev.joined) || new Date().toISOString().slice(0, 10)
+      };
+      saveRegisteredUsers(all);
+    };
+
+    const VerifiedBadge = ({ title }) => (
+      <svg viewBox="0 0 24 24" className="inline-block w-4 h-4 ml-1 align-text-bottom" role="img" aria-label={title}>
+        <title>{title}</title>
+        <circle cx="12" cy="12" r="10" fill="#38bdf8" />
+        <path d="M7.5 12.5l3 3 6-6.5" fill="none" stroke="#04111c" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+
+    const RankBadge = ({ rank, t }) => {
+      const r = hasRank(rank) ? RANKS[rank] : RANKS.member;
+      return (
+        <span className={`text-[10px] px-2.5 py-1 rounded-full border font-medium ${r.cls}`}>{t[r.labelKey]}</span>
+      );
+    };
+
+    const UserName = ({ name, info, t }) => (
+      <span style={{ color: safeColor(info.nameColor) }}>
+        {name}
+        {info.verified && <VerifiedBadge title={t.verified} />}
+      </span>
+    );
+
+    const SwitchBtn = ({ checked, onChange, disabled, onClass = 'bg-amber-400' }) => (
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+          checked ? onClass : 'bg-zinc-800'
+        } ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
+      >
+        <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-black shadow transition duration-200 ease-in-out ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+      </button>
+    );
+
+    // Translation Dictionary
+    const translations = {
+      es: {
+        menu: "Menú",
+        dashboard: "Dashboard",
+        user: "Usuario",
+        messages: "Mensajes",
+        fileManager: "Archivos",
+        setting: "Configuración",
+        logout: "Cerrar Sesión",
+        workspace: "Espacio de Trabajo",
+        connected: "Conectado",
+        welcomeBack: "Bienvenido de nuevo",
+        enterCredentials: "Ingresa tus credenciales para acceder a tu cuenta",
+        emailAddress: "Correo Electrónico",
+        password: "Contraseña",
+        rememberMe: "Recordarme",
+        forgotPassword: "¿Olvidaste tu contraseña?",
+        signIn: "Iniciar Sesión",
+        orContinueWith: "O CONTINÚA CON",
+        noAccount: "¿No tienes una cuenta?",
+        signUp: "Regístrate",
+        // Messages
+        messageCenter: "Centro de Mensajes",
+        anonActiveDesc: "Envía mensajes sin revelar tu identidad ni tu dirección de correo.",
+        identActiveDesc: "Tus mensajes mostrarán tu nombre de usuario como remitente.",
+        anonBadge: "100% Anónimo",
+        publicBadge: "Identidad Visible",
+        sendMessage: "Enviar Mensaje",
+        sendAnon: "Enviar Anónimamente",
+        privacyNoticeAnon: "Tu correo e identidad permanecerán ocultos. El destinatario solo verá el mensaje.",
+        privacyNoticeIdent: "Tu mensaje mostrará tu nombre de usuario como remitente. Tu correo no se muestra.",
+        recipientLabel: "Usuario / ID Destinatario",
+        recipientPlaceholder: "Ej. usuario_123 o Sofía",
+        messageLabel: "Mensaje",
+        messagePlaceholder: "Escribe tu mensaje aquí...",
+        sentAnonStatus: "Enviado Anónimamente",
+        sentIdentStatus: "Enviado Identificado",
+        messageHistory: "Historial de Mensajes",
+        noMessages: "No has enviado ningún mensaje todavía.",
+        fromUser: "De:",
+        toUser: "Para:",
+        recipientNotFound: "El usuario destinatario no existe. No se envió ningún mensaje.",
+        // Settings
+        settingsTitle: "Ajustes del Sistema",
+        settingsDesc: "Personaliza el idioma y las opciones de privacidad de tu cuenta",
+        languageSetting: "Idioma de la Aplicación",
+        languageDesc: "Selecciona el idioma preferido para la interfaz de usuario",
+        anonSetting: "Mensajes Anónimos",
+        anonSettingDesc: "Permite ocultar tu identidad al enviar mensajes a otros usuarios",
+        enabled: "Activado",
+        disabled: "Desactivado",
+        saveChanges: "Guardar Cambios",
+        settingsSaved: "¡Ajustes actualizados correctamente!",
+        // Overview Section
+        liveOverview: "Vista General",
+        totalUsage: "Uso Total",
+        activeItems: "Ítems Activos",
+        systemStatus: "Estado del Sistema",
+        optimal: "Óptimo",
+        operational: "Todos los servicios funcionando",
+        recentActivity: "Actividad Reciente en",
+        completed: "Completado",
+        // Users
+        registeredUsers: "Usuarios Registrados",
+        usersDesc: "Personas que han iniciado sesión con Google en este dispositivo",
+        searchUsers: "Buscar por nombre o usuario...",
+        usersCount: "usuarios",
+        colUser: "Usuario",
+        colRole: "Rol",
+        colStatus: "Estado",
+        colJoined: "Registro",
+        roleAdmin: "Admin",
+        roleMember: "Miembro",
+        statusOnline: "En línea",
+        statusOffline: "Desconectado",
+        youBadge: "Tú",
+        noUsersFound: "No se encontraron usuarios.",
+        googleError: "No se pudo iniciar sesión con Google. Intenta de nuevo.",
+        // Profile
+        profileTitle: "Perfil",
+        profileDesc: "Cambia tu foto, tu nombre para mostrar y tu nombre de usuario",
+        changePhoto: "Cambiar foto",
+        removePhoto: "Quitar foto personalizada",
+        displayNameLabel: "Nombre para mostrar",
+        displayNamePlaceholder: "Tu nombre",
+        usernameLabel: "Nombre de usuario",
+        usernameHint: "De 3 a 20 caracteres: letras minúsculas, números, punto y guion bajo.",
+        emailReadonly: "Correo (no se puede cambiar)",
+        saveProfile: "Guardar Perfil",
+        profileSaved: "¡Perfil actualizado!",
+        errNameEmpty: "Escribe un nombre para mostrar.",
+        errUsername: "El usuario debe tener de 3 a 20 caracteres (letras minúsculas, números, . y _).",
+        photoInvalid: "Ese archivo no es una imagen válida.",
+        photoTooBig: "La imagen es demasiado grande (máximo 15 MB).",
+        saveFailed: "No se pudo guardar el perfil. Prueba con una foto más pequeña.",
+        comingSoon: "Pronto",
+        emailLoginSoon: "El inicio de sesión con correo y contraseña y con Apple estará disponible pronto. Por ahora, entra con Google.",
+        // Admin
+        adminPanel: "Panel de Administrador",
+        adminLockedDesc: "Zona protegida. Escribe la contraseña de administrador para entrar.",
+        adminUnlockedDesc: "Gestiona los rangos, la verificación, los colores y las cuentas de los usuarios.",
+        adminPasswordPlaceholder: "Contraseña de administrador",
+        adminEnter: "Entrar",
+        adminWrongPassword: "Contraseña incorrecta.",
+        adminLock: "Bloquear panel",
+        adminModeBadge: "Modo admin",
+        adminStatUsers: "Usuarios",
+        adminStatVerified: "Verificados",
+        adminStatAdmins: "Admins",
+        adminStatSuspended: "Suspendidos",
+        adminSearch: "Buscar usuario...",
+        adminRank: "Rango",
+        adminVerified: "Verificado",
+        adminSuspend: "Suspender cuenta",
+        adminNameColor: "Color del nombre",
+        adminColorReset: "Quitar color",
+        adminCustomColor: "Otro color",
+        adminRemove: "Eliminar de la lista",
+        adminConfirmRemove: "¿Eliminar a este usuario de la lista? Podrá volver a aparecer si inicia sesión con Google.",
+        adminResetAll: "Restablecer todo",
+        adminConfirmReset: "¿Quitar todos los rangos, verificaciones, colores y suspensiones?",
+        adminNoUsers: "No hay usuarios que mostrar.",
+        adminLocalNote: "Los cambios se guardan solo en este navegador.",
+        adminCantSelf: "No puedes suspender ni eliminar tu propia cuenta.",
+        rankMember: "Miembro",
+        rankVip: "VIP",
+        rankModerator: "Moderador",
+        rankAdmin: "Admin",
+        verified: "Verificado",
+        suspendedBadge: "Suspendido",
+        accountSuspended: "Esta cuenta está suspendida."
+      },
+      en: {
+        menu: "Menu",
+        dashboard: "Dashboard",
+        user: "User",
+        messages: "Messages",
+        fileManager: "File Manager",
+        setting: "Setting",
+        logout: "Log Out",
+        workspace: "Application Workspace",
+        connected: "Connected",
+        welcomeBack: "Welcome Back",
+        enterCredentials: "Enter your credentials to access your secure account",
+        emailAddress: "Email Address",
+        password: "Password",
+        rememberMe: "Remember me",
+        forgotPassword: "Forgot password?",
+        signIn: "Sign In",
+        orContinueWith: "OR CONTINUE WITH",
+        noAccount: "Don't have an account?",
+        signUp: "Sign Up",
+        // Messages
+        messageCenter: "Message Center",
+        anonActiveDesc: "Send messages without revealing your identity or email address.",
+        identActiveDesc: "Your messages will show your username as the sender.",
+        anonBadge: "100% Anonymous",
+        publicBadge: "Identity Visible",
+        sendMessage: "Send Message",
+        sendAnon: "Send Anonymously",
+        privacyNoticeAnon: "Your email & identity remain hidden. The recipient only sees the message content.",
+        privacyNoticeIdent: "Your message will show your username as the sender. Your email is not shown.",
+        recipientLabel: "Recipient User / ID",
+        recipientPlaceholder: "e.g. user_123 or Sophia",
+        messageLabel: "Message",
+        messagePlaceholder: "Write your message here...",
+        sentAnonStatus: "Sent Anonymously",
+        sentIdentStatus: "Sent Identified",
+        messageHistory: "Message History",
+        noMessages: "You haven't sent any messages yet.",
+        fromUser: "From:",
+        toUser: "To:",
+        recipientNotFound: "Recipient user does not exist. No message was sent.",
+        // Settings
+        settingsTitle: "System Settings",
+        settingsDesc: "Customize application language and privacy configurations",
+        languageSetting: "Application Language",
+        languageDesc: "Select your preferred interface language",
+        anonSetting: "Anonymous Messages",
+        anonSettingDesc: "Optionally hide your identity when delivering user messages",
+        enabled: "Enabled",
+        disabled: "Disabled",
+        saveChanges: "Save Settings",
+        settingsSaved: "Settings updated successfully!",
+        // Overview Section
+        liveOverview: "Live Overview",
+        totalUsage: "Total Usage",
+        activeItems: "Active Items",
+        systemStatus: "System Status",
+        optimal: "Optimal",
+        operational: "All services operational",
+        recentActivity: "Recent Activity in",
+        completed: "Completed",
+        // Users
+        registeredUsers: "Registered Users",
+        usersDesc: "People who have signed in with Google on this device",
+        searchUsers: "Search by name or username...",
+        usersCount: "users",
+        colUser: "User",
+        colRole: "Role",
+        colStatus: "Status",
+        colJoined: "Joined",
+        roleAdmin: "Admin",
+        roleMember: "Member",
+        statusOnline: "Online",
+        statusOffline: "Offline",
+        youBadge: "You",
+        noUsersFound: "No users found.",
+        googleError: "Couldn't sign in with Google. Please try again.",
+        // Profile
+        profileTitle: "Profile",
+        profileDesc: "Change your photo, display name and username",
+        changePhoto: "Change photo",
+        removePhoto: "Remove custom photo",
+        displayNameLabel: "Display name",
+        displayNamePlaceholder: "Your name",
+        usernameLabel: "Username",
+        usernameHint: "3 to 20 characters: lowercase letters, numbers, dot and underscore.",
+        emailReadonly: "Email (can't be changed)",
+        saveProfile: "Save Profile",
+        profileSaved: "Profile updated!",
+        errNameEmpty: "Enter a display name.",
+        errUsername: "Username must be 3 to 20 characters (lowercase letters, numbers, . and _).",
+        photoInvalid: "That file isn't a valid image.",
+        photoTooBig: "The image is too large (15 MB max).",
+        saveFailed: "Couldn't save the profile. Try a smaller photo.",
+        comingSoon: "Soon",
+        emailLoginSoon: "Email/password and Apple sign-in will be available soon. For now, sign in with Google.",
+        // Admin
+        adminPanel: "Admin Panel",
+        adminLockedDesc: "Protected area. Enter the administrator password to continue.",
+        adminUnlockedDesc: "Manage user ranks, verification, name colors and accounts.",
+        adminPasswordPlaceholder: "Administrator password",
+        adminEnter: "Enter",
+        adminWrongPassword: "Wrong password.",
+        adminLock: "Lock panel",
+        adminModeBadge: "Admin mode",
+        adminStatUsers: "Users",
+        adminStatVerified: "Verified",
+        adminStatAdmins: "Admins",
+        adminStatSuspended: "Suspended",
+        adminSearch: "Search user...",
+        adminRank: "Rank",
+        adminVerified: "Verified",
+        adminSuspend: "Suspend account",
+        adminNameColor: "Name color",
+        adminColorReset: "Remove color",
+        adminCustomColor: "Other color",
+        adminRemove: "Remove from list",
+        adminConfirmRemove: "Remove this user from the list? They can reappear if they sign in with Google.",
+        adminResetAll: "Reset everything",
+        adminConfirmReset: "Remove all ranks, verifications, colors and suspensions?",
+        adminNoUsers: "No users to show.",
+        adminLocalNote: "Changes are saved in this browser only.",
+        adminCantSelf: "You can't suspend or remove your own account.",
+        rankMember: "Member",
+        rankVip: "VIP",
+        rankModerator: "Moderator",
+        rankAdmin: "Admin",
+        verified: "Verified",
+        suspendedBadge: "Suspended",
+        accountSuspended: "This account is suspended."
+      }
+    };
+
+    const Icon = ({ name, className = "w-5 h-5", ...props }) => {
+      useEffect(() => {
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+      }, [name]);
+      return <i data-lucide={name} className={className} {...props}></i>;
+    };
+
+    function LoginScreen({ onLoginSuccess, lang }) {
+      const t = translations[lang];
+      const [email, setEmail] = useState('');
+      const [password, setPassword] = useState('');
+      const [showPass
